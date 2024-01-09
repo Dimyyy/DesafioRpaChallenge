@@ -1,11 +1,7 @@
 ﻿using Dominio.Interfaces;
-using OpenQA.Selenium;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Dominio.Interfaces;
-using System.Threading.Tasks;
+using OfficeOpenXml;
+
+
 
 namespace Executor
 {
@@ -13,11 +9,16 @@ namespace Executor
     {
         private readonly IWebDriverServices _webDriverServices;
         private readonly IRpaChallengeService _rpaChallengeService;
+        private readonly ICsvService _csvService;
+        private readonly string _diretorioBase = @"C:\Users\Daniel\Downloads";
+        private readonly string _path = @$"C:\RPA\DesafioRPAChallenge\log_{DateTime.Now:dd_MM_yyyy}.csv";
+
 
         public Runner(
             
              IWebDriverServices webDriverService,
-             IRpaChallengeService rpaChallengeService
+             IRpaChallengeService rpaChallengeService,
+             ICsvService csvService
              )
         {
           
@@ -30,9 +31,95 @@ namespace Executor
             {
                 _rpaChallengeService.AbrirSite();
                 _rpaChallengeService.GoToUrl();
-                _rpaChallengeService.ClicarStart();
                 _rpaChallengeService.DownloadExcel();
-               
+                _rpaChallengeService.ClicarStart();
+
+                // Procura por arquivos .xlsx no diretório base e suas subpastas
+                string[] arquivosXlsx = Directory.GetFiles(_diretorioBase, "*.xlsx", SearchOption.AllDirectories);
+
+                if (arquivosXlsx.Length <= 0)
+                {
+                    Console.WriteLine("Nenhum arquivo .xlsx encontrado no diretório base e suas subpastas.");
+                    return;
+                }
+
+                foreach (string arquivoXlsx in arquivosXlsx)
+                {
+                    Console.WriteLine(arquivoXlsx);
+                    break;
+                }
+
+                Console.WriteLine(arquivosXlsx[0]);
+
+                // Abre o arquivo Excel
+                using (var package = new ExcelPackage(new FileInfo(arquivosXlsx[0])))
+                {
+                    ExcelPackage.LicenseContext = LicenseContext.Commercial;
+                    ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+                    // Acessa a planilha desejada (por índice, começando em 0)
+                    var worksheet = package.Workbook.Worksheets[0];
+
+                    // Obtém as dimensões da planilha (número de linhas e colunas)
+                    int rowCount = worksheet.Dimension.Rows;
+                    int colCount = worksheet.Dimension.Columns;
+
+                    // Loop para percorrer os dados
+                    for (int row = 1; row <= rowCount; row++)
+                    {
+                        var status = string.Empty;
+                        var mensagem = string.Empty;
+
+                        // Obtém o valor da célula na linha atual e coluna atual
+                        var firstName = (string)worksheet.Cells[row, 1].Value;
+                        var lastName = (string)worksheet.Cells[row, 2].Value;
+                        var companyName = (string)worksheet.Cells[row, 3].Value;
+                        var roleCompany = (string)worksheet.Cells[row, 4].Value;
+                        var address = (string)worksheet.Cells[row, 5].Value;
+                        var email = (string)worksheet.Cells[row, 6].Value;
+                        var phoneNumber = worksheet.Cells[row, 7].Value;
+                        try
+                        {
+                            if (firstName == null)
+                            {
+                                break;
+                            }
+
+                            if (firstName.Equals("First Name"))
+                            {
+                                continue;
+                            }
+
+                            Console.WriteLine($"First name: {firstName}");
+                            Console.WriteLine($"Last name: {lastName}");
+                            Console.WriteLine($"Company name: {companyName}");
+                            Console.WriteLine($"Role company: {roleCompany}");
+                            Console.WriteLine($"Address: {address}");
+                            Console.WriteLine($"Email: {email}");
+                            Console.WriteLine($"Phone number: {phoneNumber}");
+
+                            _rpaChallengeService.PreencherFormulario(firstName.ToString(), lastName.ToString(), companyName.ToString(), roleCompany.ToString(), address.ToString(), email.ToString(), phoneNumber.ToString());
+                            _rpaChallengeService.ClicarSubmit();
+                            status = "Sucesso";
+                            mensagem = string.Empty;
+                        }
+                        catch (Exception e)
+                        {
+                            status = "Falha";
+                            mensagem = e.Message;
+                        }
+                        finally
+                        {
+                            //_csvService.Write(_path, firstName.ToString(), lastName.ToString(), companyName.ToString(), roleCompany.ToString(), address.ToString(), email.ToString(), phoneNumber.ToString(),status,mensagem);
+                        }
+                    }
+                }
+
+                var resultadoDesafio = _rpaChallengeService.ResultadoDesafio();
+
+                //_outlookService.EnviarEmail(arquivosXlsx[0], resultadoDesafio);
+
+
             }
             catch (Exception)
             {
